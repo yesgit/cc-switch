@@ -92,9 +92,10 @@ jobs:
             "$APP_DIR"
 
           echo "=== Exporting to repo ==="
-          flatpak build-export flatpak-repo "$APP_DIR"
+          REPO_DIR=$(mktemp -d)
+          flatpak build-export "$REPO_DIR" "$APP_DIR"
           mkdir -p output
-          flatpak build-bundle flatpak-repo "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
+          flatpak build-bundle "$REPO_DIR" "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
           ls -la output/
           echo "✅ Flatpak bundle created"
 
