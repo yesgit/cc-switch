@@ -21,8 +21,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Build-time system deps
 # libsoup-3.0-dev is REQUIRED by Tauri v2 (WRY → soup3-sys) — only on Ubuntu 22.04+
+# ca-certificates is required for HTTPS (curl, rustup, nodesource)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config curl wget file patchelf \
+    build-essential pkg-config ca-certificates curl wget file patchelf \
     libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
     libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -120,4 +121,4 @@ RUN cd /app \
 
 # VOLUME + CMD: run container to extract AppImage to host
 VOLUME /out
-CMD sh -c 'cp /app/*.AppImage /out/ && echo "✅ AppImage copied to /out/" && ls -la /out/'
+CMD ["sh", "-c", "cp /app/*.AppImage /out/ && echo 'AppImage copied to /out/' && ls -la /out/"]
