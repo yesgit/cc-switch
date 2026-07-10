@@ -60,8 +60,8 @@ jobs:
       - name: Assemble Flatpak application
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          APP_DIR=build-dir
-          rm -rf "$APP_DIR"
+          # Use temp dir to avoid flatpak init conflicts
+          APP_DIR=$(mktemp -d)
           mkdir -p "$APP_DIR/files"
 
           # Copy all .deb contents into flatpak app
@@ -92,7 +92,6 @@ jobs:
             "$APP_DIR"
 
           echo "=== Exporting to repo ==="
-          rm -rf flatpak-repo
           flatpak build-export flatpak-repo "$APP_DIR"
           mkdir -p output
           flatpak build-bundle flatpak-repo "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
