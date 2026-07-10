@@ -17,9 +17,7 @@
 FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PATH="/root/.cargo/bin:$PATH" \
-    TAURI_SIGNING_PRIVATE_KEY="" \
-    TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+    PATH="/root/.cargo/bin:$PATH"
 
 # Build-time system deps
 # libsoup-3.0-dev is REQUIRED by Tauri v2 (WRY → soup3-sys) — only on Ubuntu 22.04+
@@ -57,6 +55,11 @@ RUN node --version \
 
 # Install frontend dependencies
 RUN pnpm install --frozen-lockfile
+
+# Disable updater signing in Docker (we don't have the private key)
+# Tauri will try to sign if pubkey is present; clear it to skip
+RUN sed -i 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json \
+    && sed -i 's|"pubkey": ".*"|"pubkey": ""|' src-tauri/tauri.conf.json
 
 # Build frontend (Vite) then Rust backend + .deb
 # Produces: src-tauri/target/release/cc-switch (binary)
