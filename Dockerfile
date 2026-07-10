@@ -148,4 +148,4 @@ RUN cd /app \
 
 # VOLUME + CMD: run container to extract AppImage to host
 VOLUME /out
-CMD ["sh", "-c", "cp /app/*.AppImage /out/ && echo 'AppImage copied to /out/' && ls -la /out/"]
+CMD ["sh", "-c", "chmod +x /app/*.AppImage && cp /app/*.AppImage /out/ && echo 'AppImage copied to /out/' && ls -la /out/"]

@@ -62,7 +62,8 @@ jobs:
         run: |
           APPFILE="${{ env.appimage }}"
           echo "=== Extracting AppImage ==="
-          chmod +x "$APPFILE"
+          # Docker copies file as root; chmod may fail if not executable yet
+          chmod +x "$APPFILE" 2>/dev/null || sudo chmod +x "$APPFILE" 2>/dev/null || true
           "$APPFILE" --appimage-extract
           BINARY="squashfs-root/usr/bin/cc-switch"
 
