@@ -25,28 +25,45 @@ jobs:
           file: ./Dockerfile
           load: true
           tags: cc-switch:temp
-          cache-from: type=gha,scope=cc-switch-flatpak-v2
-          cache-to: type=gha,mode=max,scope=cc-switch-flatpak-v2
+          cache-from: type=gha,scope=cc-switch-flatpak-v3
+          cache-to: type=gha,mode=max,scope=cc-switch-flatpak-v3
           push: false
 
       - name: Extract .deb from Docker
         run: |
           docker create --name cc-tmp cc-switch:temp
-          docker cp cc-tmp:/out/cc-switch.deb ./cc-switch.deb 2>/dev/null || \
-            docker cp cc-tmp:/out/. ./
+          docker cp cc-tmp:/out/cc-switch.deb ./cc-switch.deb
           docker rm cc-tmp
-          ls -la ./
-          test -f cc-switch.deb || (echo "ERROR: no .deb" >&2 && exit 1)
+          test -f cc-switch.deb || (echo "ERROR: no .deb" >&2; exit 1)
           echo "✅ .deb extracted"
 
-      - name: Extract .deb contents
+      - name: Extract .deb contents on host
         run: |
-          mkdir -p app-dir
-          cd app-dir
+          mkdir -p app-files
+          cd app-files
           ar x ../cc-switch.deb
           tar xf data.tar.*
-          rm data.tar.* control.tar.* debian-binary
-          echo "✅ .deb extracted to app-dir/"
+          rm -f data.tar.* control.tar.* debian-binary
+          cd ..
+          echo "=== Contents ==="
+          find app-files -maxdepth 3 -type d
+          test -f app-files/usr/bin/cc-switch || (echo "ERROR: binary missing" >&2; exit 1)
+
+      - name: Prepare desktop and icon assets
+        run: |
+          mkdir -p app-files/share/applications
+          mkdir -p app-files/share/icons/hicolor/128x128/apps
+          mkdir -p app-files/share/metainfo
+          rm -f app-files/share/applications/*.desktop
+          cp flatpak/com.ccswitch.desktop.desktop app-files/share/applications/com.ccswitch.desktop.desktop
+          cp flatpak/com.ccswitch.desktop.metainfo.xml app-files/share/metainfo/com.ccswitch.desktop.metainfo.xml
+          cp src-tauri/icons/128x128.png app-files/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png
+          # Fix install path: move usr/* up one level
+          cp -a app-files/usr/* app-files/
+          rm -rf app-files/usr
+          # Verify final structure
+          test -f app-files/bin/cc-switch || (echo "ERROR: binary at wrong path" >&2; exit 1)
+          echo "✅ Assets prepared"
 
       - name: Install Flatpak
         run: |
@@ -57,45 +74,31 @@ jobs:
             org.gnome.Platform//46 \
             org.gnome.Sdk//46
 
-      - name: Assemble Flatpak application
+      - name: Create Flatpak bundle
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          # Use temp dir to avoid flatpak init conflicts
-          APP_DIR=$(mktemp -d)
-          mkdir -p "$APP_DIR/files"
+          APP=$(mktemp -d)
+          REPO=$(mktemp -d)
+          FILES="$(pwd)/app-files"
 
-          # Copy all .deb contents into flatpak app
-          cp -a app-dir/usr "$APP_DIR/files/"
+          # Manually create flatpak metadata
+          mkdir -p "$APP/files"
+          cp -a "$FILES"/* "$APP/files/"
+          chmod -R a+rX "$APP"
 
-          # Remove upstream desktop file, use ours
-          rm -f "$APP_DIR/files/share/applications/"*.desktop
-          mkdir -p "$APP_DIR/files/share/applications"
-          mkdir -p "$APP_DIR/files/share/icons/hicolor/128x128/apps"
-          mkdir -p "$APP_DIR/files/share/metainfo"
+          # Write metadata
+          cat > "$APP/metadata" << 'METADATA'
+          [Application]
+          name=com.ccswitch.desktop
+          runtime=org.gnome.Platform/x86_64/46
+          sdk=org.gnome.Sdk/x86_64/46
+          command=cc-switch
+          METADATA
 
-          cp flatpak/com.ccswitch.desktop.desktop "$APP_DIR/files/share/applications/com.ccswitch.desktop.desktop"
-          cp flatpak/com.ccswitch.desktop.metainfo.xml "$APP_DIR/files/share/metainfo/com.ccswitch.desktop.metainfo.xml"
-          cp src-tauri/icons/128x128.png "$APP_DIR/files/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png"
-
-          echo "=== Init flatpak app ==="
-          flatpak build-init "$APP_DIR" com.ccswitch.desktop org.gnome.Sdk org.gnome.Platform 46
-
-          echo "=== Finishing ==="
-          flatpak build-finish \
-            --socket=wayland --socket=fallback-x11 \
-            --socket=pulseaudio --share=ipc --share=network \
-            --device=dri \
-            --talk-name=org.kde.StatusNotifierWatcher \
-            --filesystem=xdg-run/tray-icon:create \
-            --filesystem=home \
-            --command=cc-switch \
-            "$APP_DIR"
-
-          echo "=== Exporting to repo ==="
-          REPO_DIR=$(mktemp -d)
-          flatpak build-export "$REPO_DIR" "$APP_DIR"
+          # Export and bundle
+          flatpak build-export "$REPO" "$APP"
           mkdir -p output
-          flatpak build-bundle "$REPO_DIR" "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
+          flatpak build-bundle "$REPO" "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
           ls -la output/
           echo "✅ Flatpak bundle created"
 
