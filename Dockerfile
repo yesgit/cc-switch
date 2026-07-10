@@ -17,7 +17,9 @@
 FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PATH="/root/.cargo/bin:$PATH"
+    PATH="/root/.cargo/bin:$PATH" \
+    TAURI_SIGNING_PRIVATE_KEY="" \
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 
 # Build-time system deps
 # libsoup-3.0-dev is REQUIRED by Tauri v2 (WRY → soup3-sys) — only on Ubuntu 22.04+
@@ -44,7 +46,7 @@ WORKDIR /build
 COPY . .
 
 # Use bash explicitly (ubuntu:22.04 default /bin/sh is dash)
-SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 # Verify toolchain versions
 RUN node --version \
