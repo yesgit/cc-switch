@@ -25,50 +25,77 @@ jobs:
           file: ./Dockerfile
           load: true
           tags: cc-switch:temp
-          cache-from: type=gha,scope=cc-switch-flatpak
-          cache-to: type=gha,mode=max,scope=cc-switch-flatpak
+          cache-from: type=gha,scope=cc-switch-flatpak-v2
+          cache-to: type=gha,mode=max,scope=cc-switch-flatpak-v2
           push: false
 
-      - name: Extract .deb from Docker image
+      - name: Extract .deb from Docker
         run: |
-          docker create --name cc-switch-temp cc-switch:temp
-          docker cp cc-switch-temp:/out/. flatpak/
-          docker rm cc-switch-temp
-          ls -la flatpak/
-          # Manifest expects a .deb at flatpak/cc-switch.deb
-          DEB=$(ls flatpak/*.deb | head -1)
-          test -f "$DEB" || (echo "ERROR: No .deb found" >&2 && exit 1)
-          # If the .deb has a different name, rename it to match the manifest
-          cp "$DEB" flatpak/cc-switch.deb
-          echo "✅ .deb ready: flatpak/cc-switch.deb"
+          docker create --name cc-tmp cc-switch:temp
+          docker cp cc-tmp:/out/cc-switch.deb ./cc-switch.deb 2>/dev/null || \
+            docker cp cc-tmp:/out/. ./
+          docker rm cc-tmp
+          ls -la ./
+          test -f cc-switch.deb || (echo "ERROR: no .deb" >&2 && exit 1)
+          echo "✅ .deb extracted"
 
-      - name: Install flatpak-builder and GNOME 46 runtime
+      - name: Extract .deb contents
+        run: |
+          mkdir -p app-dir
+          cd app-dir
+          ar x ../cc-switch.deb
+          tar xf data.tar.*
+          rm data.tar.* control.tar.* debian-binary
+          echo "✅ .deb extracted to app-dir/"
+
+      - name: Install Flatpak
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils
+          sudo apt-get install -y --no-install-recommends flatpak
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install -y --noninteractive flathub \
             org.gnome.Platform//46 \
             org.gnome.Sdk//46
 
-      - name: Build Flatpak bundle
+      - name: Assemble Flatpak application
         run: |
-          flatpak-builder \
-            --force-clean \
-            --repo=flatpak-repo \
-            --install-deps-from=flathub \
-            flatpak-build-dir \
-            flatpak/com.ccswitch.desktop.yml
-
-      - name: Export Flatpak bundle
-        run: |
-          mkdir -p output
           VERSION=$(node -p "require('./package.json').version")
-          flatpak build-bundle \
-            flatpak-repo \
-            "output/CC-Switch-${VERSION}-Linux.flatpak" \
-            com.ccswitch.desktop
+          APP_DIR=build-dir
+          mkdir -p "$APP_DIR/files"
+
+          # Copy all .deb contents into flatpak app
+          cp -a app-dir/usr "$APP_DIR/files/"
+          mkdir -p "$APP_DIR/files/share/applications"
+          mkdir -p "$APP_DIR/files/share/icons/hicolor/128x128/apps"
+          mkdir -p "$APP_DIR/files/share/metainfo"
+
+          # Use our desktop/metainfo/icon
+          cp flatpak/com.ccswitch.desktop.desktop "$APP_DIR/files/share/applications/com.ccswitch.desktop.desktop"
+          cp flatpak/com.ccswitch.desktop.metainfo.xml "$APP_DIR/files/share/metainfo/com.ccswitch.desktop.metainfo.xml"
+          cp src-tauri/icons/128x128.png "$APP_DIR/files/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png"
+
+          # Remove upstream desktop file to avoid conflict
+          rm -f "$APP_DIR/files/share/applications/"*.desktop
+          cp flatpak/com.ccswitch.desktop.desktop "$APP_DIR/files/share/applications/com.ccswitch.desktop.desktop"
+
+          echo "=== Building flatpak ==="
+          flatpak build-init "$APP_DIR" com.ccswitch.desktop org.gnome.Sdk org.gnome.Platform 46
+          flatpak build-finish \
+            --socket=wayland --socket=fallback-x11 \
+            --socket=pulseaudio --share=ipc --share=network \
+            --device=dri \
+            --talk-name=org.kde.StatusNotifierWatcher \
+            --filesystem=xdg-run/tray-icon:create \
+            --filesystem=home \
+            --command=cc-switch \
+            "$APP_DIR"
+
+          echo "=== Exporting to repo ==="
+          flatpak build-export --runtime --files=files flatpak-repo "$APP_DIR"
+          mkdir -p output
+          flatpak build-bundle flatpak-repo "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
           ls -la output/
+          echo "✅ Flatpak bundle created"
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v7

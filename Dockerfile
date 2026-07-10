@@ -53,9 +53,10 @@ RUN pnpm install --frozen-lockfile \
     && sed -i 's|"pubkey": ".*"|"pubkey": ""|' src-tauri/tauri.conf.json
 
 # Build
-RUN pnpm tauri build --bundles deb
+RUN pnpm tauri build --bundles deb \
+    && cp src-tauri/target/release/bundle/deb/*.deb /tmp/cc-switch.deb
 
-# Output stage: minimal image containing just the .deb
+# Output stage: just the .deb with predictable name
 FROM alpine:3.21
-COPY --from=builder /build/src-tauri/target/release/bundle/deb/*.deb /out/
-CMD ["sh", "-c", "cp /out/*.deb /output/ 2>/dev/null || ls -la /out/"]
+COPY --from=builder /tmp/cc-switch.deb /out/cc-switch.deb
+CMD ["sh", "-c", "cp /out/cc-switch.deb /output/ 2>/dev/null || ls -la /out/"]

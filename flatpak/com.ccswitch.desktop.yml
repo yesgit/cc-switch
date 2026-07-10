@@ -29,7 +29,9 @@ modules:
       - type: file
         path: ../src-tauri/icons/128x128.png
     build-commands:
-      - dpkg-deb -x *.deb .
+      - ar x cc-switch.deb
+      - tar xf data.tar.*
+      - mkdir -p /app
       - cp -a usr/* /app/
       - rm -f /app/share/applications/*.desktop
       - install -Dm644 com.ccswitch.desktop.desktop /app/share/applications/com.ccswitch.desktop.desktop
