@@ -43,10 +43,22 @@ RUN npm install -g pnpm@10.12.3
 WORKDIR /build
 COPY . .
 
-# Build frontend + Rust binary
+# Verify toolchain versions
+RUN set -euxo pipefail \
+    && node --version \
+    && npm --version \
+    && pnpm --version \
+    && rustc --version \
+    && cargo --version
+
+# Install frontend dependencies
+RUN set -euxo pipefail \
+    && pnpm install --frozen-lockfile
+
+# Build frontend (Vite) then Rust backend + .deb
 # Produces: src-tauri/target/release/cc-switch (binary)
 #           src-tauri/target/release/bundle/deb/*.deb (for desktop/icon assets)
-RUN pnpm install --frozen-lockfile \
+RUN set -euxo pipefail \
     && pnpm tauri build --bundles deb
 
 # ── Stage 2: Package AppImage ─────────────────────────────────────
