@@ -55,6 +55,7 @@ jobs:
         run: |
           flatpak-builder \
             --force-clean \
+            --no-strip \
             --repo=flatpak-repo \
             --install-deps-from=flathub \
             flatpak-build-dir \
