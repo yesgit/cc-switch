@@ -50,6 +50,8 @@ modules:
       - --disable-dumper
       - --disable-static
       - --disable-nls
+      - --disable-introspection
+      - --disable-vala
     sources:
       - type: archive
         url: https://launchpad.net/libdbusmenu/16.04/16.04.0/+download/libdbusmenu-16.04.0.tar.gz
