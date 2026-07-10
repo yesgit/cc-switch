@@ -61,25 +61,26 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           APP_DIR=build-dir
+          rm -rf "$APP_DIR"
           mkdir -p "$APP_DIR/files"
 
           # Copy all .deb contents into flatpak app
           cp -a app-dir/usr "$APP_DIR/files/"
+
+          # Remove upstream desktop file, use ours
+          rm -f "$APP_DIR/files/share/applications/"*.desktop
           mkdir -p "$APP_DIR/files/share/applications"
           mkdir -p "$APP_DIR/files/share/icons/hicolor/128x128/apps"
           mkdir -p "$APP_DIR/files/share/metainfo"
 
-          # Use our desktop/metainfo/icon
           cp flatpak/com.ccswitch.desktop.desktop "$APP_DIR/files/share/applications/com.ccswitch.desktop.desktop"
           cp flatpak/com.ccswitch.desktop.metainfo.xml "$APP_DIR/files/share/metainfo/com.ccswitch.desktop.metainfo.xml"
           cp src-tauri/icons/128x128.png "$APP_DIR/files/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png"
 
-          # Remove upstream desktop file to avoid conflict
-          rm -f "$APP_DIR/files/share/applications/"*.desktop
-          cp flatpak/com.ccswitch.desktop.desktop "$APP_DIR/files/share/applications/com.ccswitch.desktop.desktop"
-
-          echo "=== Building flatpak ==="
+          echo "=== Init flatpak app ==="
           flatpak build-init "$APP_DIR" com.ccswitch.desktop org.gnome.Sdk org.gnome.Platform 46
+
+          echo "=== Finishing ==="
           flatpak build-finish \
             --socket=wayland --socket=fallback-x11 \
             --socket=pulseaudio --share=ipc --share=network \
@@ -91,7 +92,8 @@ jobs:
             "$APP_DIR"
 
           echo "=== Exporting to repo ==="
-          flatpak build-export --runtime --files=files flatpak-repo "$APP_DIR"
+          rm -rf flatpak-repo
+          flatpak build-export flatpak-repo "$APP_DIR"
           mkdir -p output
           flatpak build-bundle flatpak-repo "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
           ls -la output/
