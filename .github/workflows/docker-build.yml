@@ -1,28 +1,15 @@
-name: Docker Build (Self-contained AppImage)
+name: Flatpak Build (Ubuntu 20.04+ Compatible)
 
 on:
   workflow_dispatch:
-    inputs:
-      push_to_registry:
-        description: 'Push Docker image to ghcr.io'
-        type: boolean
-        default: false
   push:
     tags:
       - 'v*'
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   build:
-    name: Build AppImage via Docker
+    name: Build Flatpak
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      packages: write
-      actions: read
 
     steps:
       - name: Checkout
@@ -37,89 +24,55 @@ jobs:
           context: .
           file: ./Dockerfile
           load: true
-          tags: cc-switch:ubuntu20-compat
-          cache-from: type=gha,scope=cc-switch-docker-v2
-          cache-to: type=gha,mode=max,scope=cc-switch-docker-v2
-          # Only tag images, don't push yet
+          tags: cc-switch:temp
+          cache-from: type=gha,scope=cc-switch-flatpak
+          cache-to: type=gha,mode=max,scope=cc-switch-flatpak
           push: false
 
-      - name: Extract AppImage from Docker image
+      - name: Extract .deb from Docker image
+        run: |
+          docker create --name cc-switch-temp cc-switch:temp
+          docker cp cc-switch-temp:/out/. flatpak/
+          docker rm cc-switch-temp
+          ls -la flatpak/
+          # Manifest expects a .deb at flatpak/cc-switch.deb
+          DEB=$(ls flatpak/*.deb | head -1)
+          test -f "$DEB" || (echo "ERROR: No .deb found" >&2 && exit 1)
+          # If the .deb has a different name, rename it to match the manifest
+          cp "$DEB" flatpak/cc-switch.deb
+          echo "✅ .deb ready: flatpak/cc-switch.deb"
+
+      - name: Install flatpak-builder and GNOME 46 runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub \
+            org.gnome.Platform//46 \
+            org.gnome.Sdk//46
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak-builder \
+            --force-clean \
+            --repo=flatpak-repo \
+            --install-deps-from=flathub \
+            flatpak-build-dir \
+            flatpak/com.ccswitch.desktop.yml
+
+      - name: Export Flatpak bundle
         run: |
           mkdir -p output
-          docker run --rm -v "$(pwd)/output:/out" cc-switch:ubuntu20-compat
-          echo "=== AppImage contents ==="
+          VERSION=$(node -p "require('./package.json').version")
+          flatpak build-bundle \
+            flatpak-repo \
+            "output/CC-Switch-${VERSION}-Linux.flatpak" \
+            com.ccswitch.desktop
           ls -la output/
-          # Set output for next steps
-          APPFILE=$(ls output/*.AppImage 2>/dev/null | head -1)
-          if [ -z "$APPFILE" ]; then
-            echo "ERROR: No AppImage found in output/" >&2
-            exit 1
-          fi
-          echo "appimage=$APPFILE" >> $GITHUB_ENV
-          echo "✅ AppImage: $APPFILE"
 
-      - name: Verify AppImage compatibility
-        run: |
-          APPFILE="${{ env.appimage }}"
-          echo "=== Extracting AppImage ==="
-          # Docker copies file as root — use sudo (GHA has passwordless sudo)
-          if [ ! -x "$APPFILE" ]; then
-            sudo chmod +x "$APPFILE"
-          fi
-          "$APPFILE" --appimage-extract
-          BINARY="squashfs-root/usr/bin/cc-switch"
-          BUNDLED="squashfs-root/usr/lib"
-
-          echo "=== 1. Checking binary + bundled libs (LD_LIBRARY_PATH) ==="
-          if LD_LIBRARY_PATH="$BUNDLED" ldd "$BINARY" 2>&1 | grep "not found"; then
-            echo "⚠️  Some libs not bundled — check ldd above for details"
-          else
-            echo "✅ All libraries resolved with bundled set"
-          fi
-
-          echo "=== 2. ldd with system defaults (shows what AppImage provides) ==="
-          ldd "$BINARY" 2>&1 | grep -iE "ssl|tls" || echo "(none linked directly)"
-
-          echo "=== 3. Required GLIBC version ==="
-          MAX_GLIBC=$( (readelf -s "$BINARY" 2>/dev/null; for lib in "$BUNDLED"/*.so*; do readelf -s "$lib" 2>/dev/null; done) \
-            | grep -oP 'GLIBC_\d+\.\d+' | sort -Vu | tail -1)
-          echo "Maximum GLIBC required: ${MAX_GLIBC:-unknown}"
-          case "$MAX_GLIBC" in
-            GLIBC_2.[0-9]|GLIBC_2.[0-2][0-9]|GLIBC_2.3[01])
-              echo "✅ Compatible with Ubuntu 20.04 (GLIBC 2.31)";;
-            *)
-              echo "⚠️  May need newer GLIBC than Ubuntu 20.04 provides (>= ${MAX_GLIBC})";;
-          esac
-
-          echo "=== 4. Bundled libraries ==="
-          ls "$BUNDLED"/ 2>/dev/null | head -30 || echo "(no bundled libs dir)"
-
-      - name: Upload AppImage artifact
+      - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v7
         with:
-          name: CC-Switch-Ubuntu20.04-Compatible-AppImage
-          path: output/*.AppImage
+          name: CC-Switch-Linux-Flatpak
+          path: output/*.flatpak
           if-no-files-found: error
-
-      - name: Log in to ghcr.io
-        if: github.event_name != 'workflow_dispatch' || inputs.push_to_registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push Docker image to ghcr.io
-        if: github.event_name != 'workflow_dispatch' || inputs.push_to_registry
-        run: |
-          # Tag with version (from git tag) and latest
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            VERSION="latest"
-          fi
-          docker tag cc-switch:ubuntu20-compat ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
-          docker tag cc-switch:ubuntu20-compat ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ubuntu20-compat
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ubuntu20-compat
-          echo "✅ Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
