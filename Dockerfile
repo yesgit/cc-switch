@@ -43,23 +43,23 @@ RUN npm install -g pnpm@10.12.3
 WORKDIR /build
 COPY . .
 
+# Use bash explicitly (ubuntu:22.04 default /bin/sh is dash)
+SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+
 # Verify toolchain versions
-RUN set -euxo pipefail \
-    && node --version \
+RUN node --version \
     && npm --version \
     && pnpm --version \
     && rustc --version \
     && cargo --version
 
 # Install frontend dependencies
-RUN set -euxo pipefail \
-    && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Build frontend (Vite) then Rust backend + .deb
 # Produces: src-tauri/target/release/cc-switch (binary)
 #           src-tauri/target/release/bundle/deb/*.deb (for desktop/icon assets)
-RUN set -euxo pipefail \
-    && pnpm tauri build --bundles deb
+RUN pnpm tauri build --bundles deb
 
 # ── Stage 2: Package AppImage ─────────────────────────────────────
 FROM ubuntu:22.04 AS packager
