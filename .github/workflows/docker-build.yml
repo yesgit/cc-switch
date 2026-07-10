@@ -45,7 +45,7 @@ jobs:
       - name: Install flatpak-builder and GNOME 46 runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install -y --noninteractive flathub \
             org.gnome.Platform//46 \
@@ -55,7 +55,6 @@ jobs:
         run: |
           flatpak-builder \
             --force-clean \
-            --no-strip \
             --repo=flatpak-repo \
             --install-deps-from=flathub \
             flatpak-build-dir \
