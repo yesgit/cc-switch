@@ -17,7 +17,6 @@ import { useDarkMode } from "@/hooks/useDarkMode";
 import type {
   ProviderCategory,
   ProviderMeta,
-  ProviderTestConfig,
   ClaudeApiFormat,
   CodexApiFormat,
   CodexCatalogModel,
@@ -314,9 +313,6 @@ function ProviderFormFull({
     return initialData?.meta?.isFullUrl ?? false;
   });
 
-  const [testConfig, setTestConfig] = useState<ProviderTestConfig>(
-    () => initialData?.meta?.testConfig ?? { enabled: false },
-  );
   const [pricingConfig, setPricingConfig] = useState<{
     enabled: boolean;
     costMultiplier?: string;
@@ -352,7 +348,6 @@ function ProviderFormFull({
     setLocalIsFullUrl(
       supportsFullUrl ? (initialData?.meta?.isFullUrl ?? false) : false,
     );
-    setTestConfig(initialData?.meta?.testConfig ?? { enabled: false });
     setPricingConfig({
       enabled:
         initialData?.meta?.costMultiplier !== undefined ||
@@ -1511,7 +1506,6 @@ function ProviderFormFull({
       localProxyRequestOverrides: shouldApplyLocalProxyRequestOverrides
         ? overridesResult.overrides
         : undefined,
-      testConfig: testConfig.enabled ? testConfig : undefined,
       costMultiplier: pricingConfig.enabled
         ? pricingConfig.costMultiplier
         : undefined,
@@ -2487,9 +2481,7 @@ function ProviderFormFull({
             appId !== "openclaw" &&
             appId !== "hermes" && (
               <ProviderAdvancedConfig
-                testConfig={testConfig}
                 pricingConfig={pricingConfig}
-                onTestConfigChange={setTestConfig}
                 onPricingConfigChange={setPricingConfig}
               />
             )}
