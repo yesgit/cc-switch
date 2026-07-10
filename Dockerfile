@@ -72,10 +72,9 @@ FROM ubuntu:22.04 AS packager
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8
 
-# Runtime-only system deps (no -dev packages)
-# These are the libraries that linuxdeploy will detect via ldd and bundle
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates file patchelf \
+    libgtk-3-0 librsvg2-2 libayatana-appindicator3-1 \
     libgtk-3-0 librsvg2-2 libayatana-appindicator3-1 \
     libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 \
     libsoup-3.0-0 libenchant-2-2 libsecret-1-0 libnotify4 \
@@ -100,13 +99,13 @@ COPY --from=builder /build/src-tauri/target/release/cc-switch /app/usr/bin/cc-sw
 COPY --from=builder /build/src-tauri/target/release/bundle/deb/ /tmp/deb/
 
 # Extract .deb assets: desktop file, icons
-RUN cd /tmp/deb && DEB=$(ls *.deb | head -1) && ar -x "$DEB" \
-    && mkdir -p /tmp/deb-extract && cd /tmp/deb-extract \
-    && tar -xf /tmp/deb/data.tar.* \
+RUN cd /tmp/deb && DEB=$(ls *.deb | head -1) \
+    && mkdir -p /tmp/deb-extract \
+    && dpkg-deb -x "$DEB" /tmp/deb-extract \
     && mkdir -p /app/usr/share \
-    && if [ -d usr/share/applications ]; then cp -a usr/share/applications /app/usr/share/; fi \
-    && if [ -d usr/share/icons ]; then cp -a usr/share/icons /app/usr/share/; fi \
-    && if [ -d usr/lib/systemd ]; then cp -a usr/lib/systemd /app/usr/lib/; fi \
+    && if [ -d /tmp/deb-extract/usr/share/applications ]; then cp -a /tmp/deb-extract/usr/share/applications /app/usr/share/; fi \
+    && if [ -d /tmp/deb-extract/usr/share/icons ]; then cp -a /tmp/deb-extract/usr/share/icons /app/usr/share/; fi \
+    && if [ -d /tmp/deb-extract/usr/lib/systemd ]; then cp -a /tmp/deb-extract/usr/lib/systemd /app/usr/lib/; fi \
     && rm -rf /tmp/deb /tmp/deb-extract
 
 # Verify essential files
