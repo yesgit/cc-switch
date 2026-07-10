@@ -27,10 +27,12 @@ pub mod gemini_shadow;
 pub mod models;
 pub(crate) mod reasoning_bridge;
 pub mod streaming;
+pub mod streaming_codex_anthropic;
 pub mod streaming_codex_chat;
 pub mod streaming_gemini;
 pub mod streaming_responses;
 pub mod transform;
+pub mod transform_codex_anthropic;
 pub mod transform_codex_chat;
 pub mod transform_gemini;
 pub mod transform_responses;
@@ -49,8 +51,9 @@ pub use claude::{
 };
 pub use codex::CodexAdapter;
 pub use codex::{
-    apply_codex_chat_upstream_model, codex_provider_upstream_model,
-    resolve_codex_chat_reasoning_config, should_convert_codex_responses_to_chat,
+    apply_codex_chat_upstream_model, apply_codex_upstream_model, codex_provider_upstream_model,
+    resolve_codex_catalog_tool_profile, resolve_codex_chat_reasoning_config,
+    should_convert_codex_responses_to_anthropic, should_convert_codex_responses_to_chat,
 };
 pub use gemini::GeminiAdapter;
 
