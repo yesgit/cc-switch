@@ -19,25 +19,29 @@ FROM ubuntu:22.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/root/.cargo/bin:$PATH"
 
-# Build-time system deps
-# libsoup-3.0-dev is REQUIRED by Tauri v2 (WRY → soup3-sys) — only on Ubuntu 22.04+
-# ca-certificates is required for HTTPS (curl, rustup, nodesource)
+# Step 1: SSL certs FIRST (before any curl/https operations)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config ca-certificates curl wget file patchelf \
+    ca-certificates curl \
+    && update-ca-certificates --fresh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Step 2: Build deps (libsoup-3.0-dev REQUIRED by Tauri v2 → WRY)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential pkg-config wget file patchelf \
     libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev \
     libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Rust toolchain (match rust-toolchain.toml)
+# Step 3: Rust toolchain (match rust-toolchain.toml)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --profile minimal --default-toolchain 1.95
 
-# Node.js 22 (match .node-version)
+# Step 4: Node.js 22 (match .node-version)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# pnpm (match CI version, npm -g is more reliable than corepack in Docker)
+# Step 5: pnpm (match CI version, npm -g is more reliable than corepack in Docker)
 RUN npm install -g pnpm@10.12.3
 
 WORKDIR /build
@@ -72,9 +76,16 @@ FROM ubuntu:22.04 AS packager
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8
 
+# SSL certs first (for wget)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget ca-certificates file patchelf \
-    libgtk-3-0 librsvg2-2 libayatana-appindicator3-1 \
+    ca-certificates wget \
+    && update-ca-certificates --fresh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Runtime-only system deps (no -dev packages)
+# These are the libraries that linuxdeploy will detect via ldd and bundle
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    file patchelf \
     libgtk-3-0 librsvg2-2 libayatana-appindicator3-1 \
     libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 \
     libsoup-3.0-0 libenchant-2-2 libsecret-1-0 libnotify4 \

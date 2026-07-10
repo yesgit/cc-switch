@@ -38,8 +38,8 @@ jobs:
           file: ./Dockerfile
           load: true
           tags: cc-switch:ubuntu20-compat
-          cache-from: type=gha,scope=cc-switch-docker
-          cache-to: type=gha,mode=max,scope=cc-switch-docker
+          cache-from: type=gha,scope=cc-switch-docker-v2
+          cache-to: type=gha,mode=max,scope=cc-switch-docker-v2
           # Only tag images, don't push yet
           push: false
 
