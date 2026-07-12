@@ -1,10 +1,6 @@
 name: Flatpak Build
 
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - v*
+on: [workflow_dispatch]
 
 jobs:
   build:
@@ -12,91 +8,64 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           load: true
           tags: cc-switch:temp
-          cache-from: type=gha,scope=cc-switch-flatpak-v3
-          cache-to: type=gha,mode=max,scope=cc-switch-flatpak-v3
+          cache-from: type=gha,scope=cc-switch-fp4
+          cache-to: type=gha,mode=max,scope=cc-switch-fp4
           push: false
 
-      - name: Extract .deb from Docker
-        run: |
+      - run: |
           docker create --name cc-tmp cc-switch:temp
           docker cp cc-tmp:/out/cc-switch.deb ./cc-switch.deb
           docker rm cc-tmp
           test -f cc-switch.deb || (echo "ERROR: no .deb" >&2; exit 1)
-          echo "✅ .deb extracted"
 
-      - name: Extract .deb contents on host
-        run: |
+      - run: |
           mkdir -p app-files
           cd app-files
           ar x ../cc-switch.deb
           tar xf data.tar.*
           rm -f data.tar.* control.tar.* debian-binary
           cd ..
-          echo "=== Contents ==="
-          find app-files -maxdepth 3 -type d
           test -f app-files/usr/bin/cc-switch || (echo "ERROR: binary missing" >&2; exit 1)
 
-      - name: Prepare desktop and icon assets
-        run: |
-          mkdir -p app-files/share/applications
-          mkdir -p app-files/share/icons/hicolor/128x128/apps
-          mkdir -p app-files/share/metainfo
-          rm -f app-files/share/applications/*.desktop
-          cp flatpak/com.ccswitch.desktop.desktop app-files/share/applications/com.ccswitch.desktop.desktop
-          cp flatpak/com.ccswitch.desktop.metainfo.xml app-files/share/metainfo/com.ccswitch.desktop.metainfo.xml
-          cp src-tauri/icons/128x128.png app-files/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png
-          # Fix install path: move usr/* up one level
-          cp -a app-files/usr/* app-files/
-          rm -rf app-files/usr
-          # Verify final structure
-          test -f app-files/bin/cc-switch || (echo "ERROR: binary at wrong path" >&2; exit 1)
-          echo "✅ Assets prepared"
+      - run: |
+          rm -f app-files/usr/share/applications/*.desktop
+          cp flatpak/com.ccswitch.desktop.desktop app-files/usr/share/applications/com.ccswitch.desktop.desktop
+          cp flatpak/com.ccswitch.desktop.metainfo.xml app-files/usr/share/metainfo/com.ccswitch.desktop.metainfo.xml
+          cp src-tauri/icons/128x128.png app-files/usr/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png
 
-      - name: Install Flatpak
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub \
-            org.gnome.Platform//46 \
-            org.gnome.Sdk//46
+          sudo flatpak install -y --noninteractive flathub org.gnome.Platform//46 org.gnome.Sdk//46
 
-      - name: Create Flatpak bundle
-        run: |
+      - run: |
           VERSION=$(node -p "require('./package.json').version")
           APP=$(mktemp -d)
           REPO=$(mktemp -d)
-          FILES="$(pwd)/app-files"
 
           mkdir -p "$APP/files"
-          cp -a "$FILES"/* "$APP/files/"
+          cp -a app-files/usr/* "$APP/files/"
           chmod -R a+rX "$APP"
 
-          # Write metadata (NO indentation — flatpak INI parser requires it)
-          cat > "$APP/metadata" << 'METADATA'
+          cat > "$APP/metadata" << 'META'
 [Application]
 name=com.ccswitch.desktop
 runtime=org.gnome.Platform/x86_64/46
 sdk=org.gnome.Sdk/x86_64/46
 command=cc-switch
-METADATA
+META
 
-          echo "=== metadata ==="
           cat "$APP/metadata"
-          echo "=== files ==="
           ls "$APP/files/bin/"
           file "$APP/files/bin/cc-switch"
 
@@ -104,10 +73,8 @@ METADATA
           mkdir -p output
           flatpak build-bundle "$REPO" "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
           ls -la output/
-          echo "✅ Flatpak bundle created"
 
-      - name: Upload Flatpak artifact
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: CC-Switch-Linux-Flatpak
           path: output/*.flatpak
