@@ -1,6 +1,10 @@
-name: Flatpak Build (Ubuntu 20.04+ Compatible)
+name: Flatpak Build
 
-on: [push, workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
 
 jobs:
   build:
