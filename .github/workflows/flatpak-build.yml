@@ -1,7 +1,7 @@
 name: Flatpak Build (Ubuntu 20.04+ Compatible)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
