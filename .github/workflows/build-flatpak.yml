@@ -75,13 +75,13 @@ jobs:
           cp -a app-dir/usr/* "$APP_DIR/files/"
           chmod -R a+rX "$APP_DIR"
 
-          cat > "$APP_DIR/metadata" << 'META'
-[Application]
-name=com.ccswitch.desktop
-runtime=org.gnome.Platform/x86_64/46
-sdk=org.gnome.Sdk/x86_64/46
-command=cc-switch
-META
+          printf '%s\n' \
+            '[Application]' \
+            'name=com.ccswitch.desktop' \
+            'runtime=org.gnome.Platform/x86_64/46' \
+            'sdk=org.gnome.Sdk/x86_64/46' \
+            'command=cc-switch' \
+            > "$APP_DIR/metadata"
 
           echo "=== metadata ===" && cat "$APP_DIR/metadata"
           echo "=== binary ===" && file "$APP_DIR/files/bin/cc-switch"
