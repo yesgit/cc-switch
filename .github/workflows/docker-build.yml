@@ -81,21 +81,25 @@ jobs:
           REPO=$(mktemp -d)
           FILES="$(pwd)/app-files"
 
-          # Manually create flatpak metadata
           mkdir -p "$APP/files"
           cp -a "$FILES"/* "$APP/files/"
           chmod -R a+rX "$APP"
 
-          # Write metadata
+          # Write metadata (NO indentation — flatpak INI parser requires it)
           cat > "$APP/metadata" << 'METADATA'
-          [Application]
-          name=com.ccswitch.desktop
-          runtime=org.gnome.Platform/x86_64/46
-          sdk=org.gnome.Sdk/x86_64/46
-          command=cc-switch
-          METADATA
+[Application]
+name=com.ccswitch.desktop
+runtime=org.gnome.Platform/x86_64/46
+sdk=org.gnome.Sdk/x86_64/46
+command=cc-switch
+METADATA
 
-          # Export and bundle
+          echo "=== metadata ==="
+          cat "$APP/metadata"
+          echo "=== files ==="
+          ls "$APP/files/bin/"
+          file "$APP/files/bin/cc-switch"
+
           flatpak build-export "$REPO" "$APP"
           mkdir -p output
           flatpak build-bundle "$REPO" "output/CC-Switch-${VERSION}-Linux.flatpak" com.ccswitch.desktop
