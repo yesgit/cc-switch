@@ -2090,7 +2090,11 @@ mod tests {
         // total still includes everything: 80 + cache_creation 20 + output 5 = 105
         assert_eq!(result["usage"]["total_tokens"], 105);
         assert_eq!(result["usage"]["input_tokens_details"]["cached_tokens"], 60);
-        // cache_creation is passed through explicitly for downstream billing attribution (counted only once)
+        assert_eq!(
+            result["usage"]["input_tokens_details"]["cache_write_tokens"],
+            20
+        );
+        // Aggregate cache creation is exposed for downstream billing attribution (counted only once).
         assert_eq!(result["usage"]["cache_creation_input_tokens"], 20);
     }
 
