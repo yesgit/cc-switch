@@ -59,10 +59,12 @@ RUN pnpm install --frozen-lockfile \
 # ── Stage 2: Runtime ──
 FROM ubuntu:22.04
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    fonts-noto-cjk \
     libgtk-3-0 librsvg2-2 libayatana-appindicator3-1 \
     libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 \
     libsoup-3.0-0 libenchant-2-2 libsecret-1-0 libnotify4 \
