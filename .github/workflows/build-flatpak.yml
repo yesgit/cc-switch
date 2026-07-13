@@ -52,6 +52,9 @@ jobs:
         run: |
           set -euxo pipefail
           rm -f app-dir/usr/share/applications/*.desktop
+          mkdir -p app-dir/usr/share/applications
+          mkdir -p app-dir/usr/share/metainfo
+          mkdir -p app-dir/usr/share/icons/hicolor/128x128/apps
           cp flatpak/com.ccswitch.desktop.desktop app-dir/usr/share/applications/com.ccswitch.desktop.desktop
           cp flatpak/com.ccswitch.desktop.metainfo.xml app-dir/usr/share/metainfo/com.ccswitch.desktop.metainfo.xml
           cp src-tauri/icons/128x128.png app-dir/usr/share/icons/hicolor/128x128/apps/com.ccswitch.desktop.png
