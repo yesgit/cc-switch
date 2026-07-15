@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import {
   getGlobalProxyUrl,
   setGlobalProxyUrl,
+  getGlobalProxyBypass,
+  setGlobalProxyBypass,
   testProxyUrl,
   getUpstreamProxyStatus,
   scanLocalProxies,
@@ -101,6 +103,44 @@ export function useScanProxies() {
     onError: (error: Error) => {
       toast.error(
         t("settings.globalProxy.scanFailed", { error: error.message }),
+      );
+    },
+  });
+}
+
+/**
+ * 获取全局代理绕过主机列表
+ */
+export function useGlobalProxyBypass() {
+  return useQuery({
+    queryKey: ["globalProxyBypass"],
+    queryFn: getGlobalProxyBypass,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * 设置全局代理绕过主机列表
+ */
+export function useSetGlobalProxyBypass() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: setGlobalProxyBypass,
+    onSuccess: () => {
+      toast.success(t("settings.globalProxy.bypassSaved"));
+      queryClient.invalidateQueries({ queryKey: ["globalProxyBypass"] });
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(
+        t("settings.globalProxy.bypassSaveFailed", { error: message }),
       );
     },
   });

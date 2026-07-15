@@ -33,6 +33,29 @@ export interface DetectedProxy {
 }
 
 /**
+ * 获取全局代理绕过主机列表
+ *
+ * @returns 逗号分隔的绕过主机列表，null 表示未配置
+ */
+export async function getGlobalProxyBypass(): Promise<string | null> {
+  return invoke<string | null>("get_global_proxy_bypass");
+}
+
+/**
+ * 设置全局代理绕过主机列表
+ *
+ * @param bypass - 逗号分隔的绕过主机列表（如 "localhost,127.0.0.1,.local,.internal"）
+ *                 空字符串清除绕过列表
+ */
+export async function setGlobalProxyBypass(bypass: string): Promise<void> {
+  try {
+    return await invoke("set_global_proxy_bypass", { bypass });
+  } catch (error) {
+    throw new Error(typeof error === "string" ? error : String(error));
+  }
+}
+
+/**
  * 获取全局代理 URL
  *
  * @returns 代理 URL，null 表示未配置（直连）

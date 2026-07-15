@@ -12,6 +12,8 @@ import { Loader2, TestTube2, Search, Eye, EyeOff, X } from "lucide-react";
 import {
   useGlobalProxyUrl,
   useSetGlobalProxyUrl,
+  useGlobalProxyBypass,
+  useSetGlobalProxyBypass,
   useTestProxy,
   useScanProxies,
   type DetectedProxy,
@@ -72,7 +74,10 @@ function mergeAuth(
 export function GlobalProxySettings() {
   const { t } = useTranslation();
   const { data: savedUrl, isLoading } = useGlobalProxyUrl();
+  const { data: savedBypass, isLoading: bypassLoading } =
+    useGlobalProxyBypass();
   const setMutation = useSetGlobalProxyUrl();
+  const setBypassMutation = useSetGlobalProxyBypass();
   const testMutation = useTestProxy();
   const scanMutation = useScanProxies();
 
@@ -81,6 +86,8 @@ export function GlobalProxySettings() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [bypass, setBypass] = useState("");
+  const [bypassDirty, setBypassDirty] = useState(false);
   const [detected, setDetected] = useState<DetectedProxy[]>([]);
 
   // 计算完整 URL（含认证信息）
@@ -99,6 +106,14 @@ export function GlobalProxySettings() {
       setDirty(false);
     }
   }, [savedUrl]);
+
+  // 同步绕过列表
+  useEffect(() => {
+    if (savedBypass !== undefined) {
+      setBypass(savedBypass || "");
+      setBypassDirty(false);
+    }
+  }, [savedBypass]);
 
   const handleSave = async () => {
     await setMutation.mutateAsync(fullUrl);
@@ -132,6 +147,17 @@ export function GlobalProxySettings() {
     setDirty(true);
   };
 
+  const handleSaveBypass = async () => {
+    await setBypassMutation.mutateAsync(bypass.trim());
+    setBypassDirty(false);
+  };
+
+  const handleBypassKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && bypassDirty && !setBypassMutation.isPending) {
+      handleSaveBypass();
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && dirty && !setMutation.isPending) {
       handleSave();
@@ -139,7 +165,7 @@ export function GlobalProxySettings() {
   };
 
   // 只在首次加载且无数据时显示加载状态
-  if (isLoading && savedUrl === undefined) {
+  if ((isLoading || bypassLoading) && savedUrl === undefined) {
     return (
       <div className="flex items-center justify-center p-4">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -250,6 +276,35 @@ export function GlobalProxySettings() {
             ) : (
               <Eye className="h-4 w-4 text-muted-foreground" />
             )}
+          </Button>
+        </div>
+      </div>
+
+      {/* 绕过代理主机列表 */}
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {t("settings.globalProxy.bypassHint")}
+        </p>
+        <div className="flex gap-2">
+          <Input
+            placeholder={t("settings.globalProxy.bypassPlaceholder")}
+            value={bypass}
+            onChange={(e) => {
+              setBypass(e.target.value);
+              setBypassDirty(true);
+            }}
+            onKeyDown={handleBypassKeyDown}
+            className="font-mono text-sm flex-1"
+          />
+          <Button
+            onClick={handleSaveBypass}
+            disabled={!bypassDirty || setBypassMutation.isPending}
+            size="sm"
+          >
+            {setBypassMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {t("common.save")}
           </Button>
         </div>
       </div>

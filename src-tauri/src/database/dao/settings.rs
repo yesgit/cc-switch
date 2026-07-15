@@ -140,6 +140,9 @@ impl Database {
     /// 全局代理 URL 的存储键名
     const GLOBAL_PROXY_URL_KEY: &'static str = "global_proxy_url";
 
+    /// 全局代理绕过列表的存储键名
+    const GLOBAL_PROXY_BYPASS_KEY: &'static str = "global_proxy_bypass";
+
     /// 获取全局出站代理 URL
     ///
     /// 返回 None 表示未配置或已清除代理（直连）
@@ -163,6 +166,35 @@ impl Database {
                 conn.execute(
                     "DELETE FROM settings WHERE key = ?1",
                     params![Self::GLOBAL_PROXY_URL_KEY],
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+                Ok(())
+            }
+        }
+    }
+
+    /// 获取全局代理绕过主机列表
+    ///
+    /// 返回 None 表示未配置绕过列表
+    /// 返回 Some(hosts) 表示已配置绕过列表（逗号分隔的主机名/IP/域名）
+    pub fn get_global_proxy_bypass(&self) -> Result<Option<String>, AppError> {
+        self.get_setting(Self::GLOBAL_PROXY_BYPASS_KEY)
+    }
+
+    /// 设置全局代理绕过主机列表
+    ///
+    /// - 传入非空字符串：启用绕过列表
+    /// - 传入空字符串或 None：清除绕过列表
+    pub fn set_global_proxy_bypass(&self, bypass: Option<&str>) -> Result<(), AppError> {
+        match bypass {
+            Some(b) if !b.trim().is_empty() => {
+                self.set_setting(Self::GLOBAL_PROXY_BYPASS_KEY, b.trim())
+            }
+            _ => {
+                let conn = lock_conn!(self.conn);
+                conn.execute(
+                    "DELETE FROM settings WHERE key = ?1",
+                    params![Self::GLOBAL_PROXY_BYPASS_KEY],
                 )
                 .map_err(|e| AppError::Database(e.to_string()))?;
                 Ok(())

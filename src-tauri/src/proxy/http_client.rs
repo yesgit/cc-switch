@@ -16,6 +16,9 @@ static GLOBAL_CLIENT: OnceCell<RwLock<Client>> = OnceCell::new();
 /// 当前代理 URL（用于日志和状态查询）
 static CURRENT_PROXY_URL: OnceCell<RwLock<Option<String>>> = OnceCell::new();
 
+/// 当前代理绕过主机列表（用于日志和状态查询）
+static CURRENT_BYPASS_HOSTS: OnceCell<RwLock<Option<String>>> = OnceCell::new();
+
 /// CC Switch 代理服务器当前监听的端口
 static CC_SWITCH_PROXY_PORT: OnceCell<RwLock<u16>> = OnceCell::new();
 
@@ -50,8 +53,25 @@ fn get_proxy_port() -> u16 {
 /// # Arguments
 /// * `proxy_url` - 代理 URL，如 `http://127.0.0.1:7890` 或 `socks5://127.0.0.1:1080`
 ///   传入 None 或空字符串表示直连
-pub fn init(proxy_url: Option<&str>) -> Result<(), String> {
+/// * `bypass_hosts` - 绕过代理的主机列表（逗号分隔），如 "localhost,127.0.0.1,.local"
+///   传入 None 或空字符串表示不绕过任何主机
+pub fn init(proxy_url: Option<&str>, bypass_hosts: Option<&str>) -> Result<(), String> {
     let effective_url = proxy_url.filter(|s| !s.trim().is_empty());
+    let bypass_opt = bypass_hosts
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string());
+
+    // 先初始化绕过主机列表，使 build_client 能够读取到
+    if CURRENT_BYPASS_HOSTS.set(RwLock::new(bypass_opt.clone())).is_err() {
+        // 已初始化，更新现有值
+        if let Some(lock) = CURRENT_BYPASS_HOSTS.get() {
+            if let Ok(mut b) = lock.write() {
+                *b = bypass_opt.clone();
+            }
+        }
+        // 注意：apply_proxy 内部也会更新 bypass 记录，这里只是提前设置确保 build_client 能读到
+    }
+
     let client = build_client(effective_url)?;
 
     // 尝试初始化全局客户端，如果已存在则记录警告并使用 apply_proxy 更新
@@ -63,7 +83,7 @@ pub fn init(proxy_url: Option<&str>) -> Result<(), String> {
                 .unwrap_or_else(|| "direct connection".to_string())
         );
         // 已初始化，改用 apply_proxy 更新
-        return apply_proxy(proxy_url);
+        return apply_proxy(proxy_url, bypass_hosts);
     }
 
     // 初始化代理 URL 记录
@@ -103,8 +123,21 @@ pub fn validate_proxy(proxy_url: Option<&str>) -> Result<(), String> {
 ///
 /// # Arguments
 /// * `proxy_url` - 代理 URL，None 或空字符串表示直连
-pub fn apply_proxy(proxy_url: Option<&str>) -> Result<(), String> {
+/// * `bypass_hosts` - 绕过代理的主机列表（逗号分隔），None 或空字符串表示不绕过
+pub fn apply_proxy(proxy_url: Option<&str>, bypass_hosts: Option<&str>) -> Result<(), String> {
     let effective_url = proxy_url.filter(|s| !s.trim().is_empty());
+
+    // 先更新绕过主机列表，使 build_client 能够读取到最新值
+    if let Some(lock) = CURRENT_BYPASS_HOSTS.get() {
+        let mut bypass = lock.write().map_err(|e| {
+            log::error!("[GlobalProxy] Failed to acquire bypass write lock: {e}");
+            "Failed to update bypass hosts record: lock poisoned".to_string()
+        })?;
+        *bypass = bypass_hosts
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string());
+    }
+
     let new_client = build_client(effective_url)?;
 
     // 更新客户端
@@ -116,7 +149,7 @@ pub fn apply_proxy(proxy_url: Option<&str>) -> Result<(), String> {
         *client = new_client;
     } else {
         // 如果还没初始化，则初始化
-        return init(proxy_url);
+        return init(proxy_url, bypass_hosts);
     }
 
     // 更新代理 URL 记录
@@ -148,38 +181,8 @@ pub fn apply_proxy(proxy_url: Option<&str>) -> Result<(), String> {
 /// * `proxy_url` - 新的代理 URL，None 或空字符串表示直连
 #[allow(dead_code)]
 pub fn update_proxy(proxy_url: Option<&str>) -> Result<(), String> {
-    let effective_url = proxy_url.filter(|s| !s.trim().is_empty());
-    let new_client = build_client(effective_url)?;
-
-    // 更新客户端
-    if let Some(lock) = GLOBAL_CLIENT.get() {
-        let mut client = lock.write().map_err(|e| {
-            log::error!("[GlobalProxy] [GP-001] Failed to acquire write lock: {e}");
-            "Failed to update proxy: lock poisoned".to_string()
-        })?;
-        *client = new_client;
-    } else {
-        // 如果还没初始化，则初始化
-        return init(proxy_url);
-    }
-
-    // 更新代理 URL 记录
-    if let Some(lock) = CURRENT_PROXY_URL.get() {
-        let mut url = lock.write().map_err(|e| {
-            log::error!("[GlobalProxy] [GP-002] Failed to acquire URL write lock: {e}");
-            "Failed to update proxy URL record: lock poisoned".to_string()
-        })?;
-        *url = effective_url.map(|s| s.to_string());
-    }
-
-    log::info!(
-        "[GlobalProxy] Updated: {}",
-        effective_url
-            .map(mask_url)
-            .unwrap_or_else(|| "direct connection".to_string())
-    );
-
-    Ok(())
+    let bypass = get_current_bypass();
+    apply_proxy(proxy_url, bypass.as_deref())
 }
 
 /// 获取全局 HTTP 客户端
@@ -204,6 +207,16 @@ pub fn get_current_proxy_url() -> Option<String> {
         .get()
         .and_then(|lock| lock.read().ok())
         .and_then(|url| url.clone())
+}
+
+/// 获取当前绕过主机列表
+///
+/// 返回当前配置的绕过主机列表（逗号分隔），None 表示未配置。
+pub fn get_current_bypass() -> Option<String> {
+    CURRENT_BYPASS_HOSTS
+        .get()
+        .and_then(|lock| lock.read().ok())
+        .and_then(|b| b.clone())
 }
 
 /// 检查是否正在使用代理
@@ -243,6 +256,18 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client, String> {
 
         let proxy = reqwest::Proxy::all(url)
             .map_err(|e| format!("Invalid proxy URL '{}': {}", mask_url(url), e))?;
+
+        // 应用绕过主机列表（如果配置了的话）
+        let proxy = if let Some(ref bypass) = get_current_bypass() {
+            if let Some(no_proxy) = reqwest::NoProxy::from_string(bypass.as_str()) {
+                proxy.no_proxy(no_proxy)
+            } else {
+                proxy
+            }
+        } else {
+            proxy
+        };
+
         builder = builder.proxy(proxy);
         log::debug!("[GlobalProxy] Proxy configured: {}", mask_url(url));
     } else {
@@ -332,6 +357,33 @@ pub fn mask_url(url: &str) -> String {
             url.to_string()
         }
     }
+}
+
+/// 验证绕过主机列表格式
+///
+/// 检查绕过列表的基本格式有效性。
+/// 实际的解析由 reqwest::NoProxy 处理。
+///
+/// # Arguments
+/// * `bypass` - 逗号分隔的绕过主机列表
+///
+/// # Returns
+/// 验证成功返回 Ok(())，失败返回错误信息
+pub fn validate_bypass_hosts(bypass: &str) -> Result<(), String> {
+    if bypass.len() > 10000 {
+        return Err("Bypass list is too long (max 10000 characters)".to_string());
+    }
+    // 检查每个条目是否包含空格（空格不允许出现在主机条目中）
+    for host in bypass.split(',') {
+        let trimmed = host.trim();
+        if trimmed.contains(' ') {
+            return Err(format!(
+                "Invalid bypass host '{}': no spaces allowed within a host entry",
+                trimmed
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -56,8 +56,9 @@ pub fn set_global_proxy_url(state: tauri::State<'_, AppState>, url: String) -> R
         .set_global_proxy_url(url_opt)
         .map_err(|e| e.to_string())?;
 
-    // 3. DB 写入成功后再应用到运行态
-    http_client::apply_proxy(url_opt)?;
+    // 3. DB 写入成功后再应用到运行态（保留当前绕过列表）
+    let current_bypass = http_client::get_current_bypass();
+    http_client::apply_proxy(url_opt, current_bypass.as_deref())?;
 
     log::info!(
         "[GlobalProxy] [GP-009] Configuration updated: {}",
@@ -155,6 +156,58 @@ pub async fn test_proxy_url(url: String) -> Result<ProxyTestResult, String> {
         latency_ms: latency,
         error: Some(error_msg),
     })
+}
+
+/// 获取全局代理绕过主机列表
+///
+/// 返回当前配置的绕过主机列表（逗号分隔），null 表示未配置。
+#[tauri::command]
+pub fn get_global_proxy_bypass(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    state
+        .db
+        .get_global_proxy_bypass()
+        .map_err(|e| e.to_string())
+}
+
+/// 设置全局代理绕过主机列表
+///
+/// 绕过列表是逗号分隔的主机名/IP/域名，匹配的主机将不经过代理直接连接。
+/// 例如："localhost,127.0.0.1,.local,.internal"
+/// 传入空字符串清除绕过列表。
+#[tauri::command]
+pub fn set_global_proxy_bypass(
+    state: tauri::State<'_, AppState>,
+    bypass: String,
+) -> Result<(), String> {
+    let bypass_opt = if bypass.trim().is_empty() {
+        None
+    } else {
+        Some(bypass.as_str())
+    };
+
+    // 1. 验证绕过列表格式
+    if let Some(b) = bypass_opt {
+        http_client::validate_bypass_hosts(b)?;
+    }
+
+    // 2. 写入数据库
+    state
+        .db
+        .set_global_proxy_bypass(bypass_opt)
+        .map_err(|e| e.to_string())?;
+
+    // 3. 重新应用代理配置（保留当前 URL）
+    let current_url = http_client::get_current_proxy_url();
+    http_client::apply_proxy(current_url.as_deref(), bypass_opt)?;
+
+    log::info!(
+        "[GlobalProxy] Bypass hosts updated: {}",
+        bypass_opt.unwrap_or("(cleared)")
+    );
+
+    Ok(())
 }
 
 /// 获取当前出站代理状态
