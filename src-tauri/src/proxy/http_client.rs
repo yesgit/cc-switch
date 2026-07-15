@@ -62,7 +62,10 @@ pub fn init(proxy_url: Option<&str>, bypass_hosts: Option<&str>) -> Result<(), S
         .map(|s| s.to_string());
 
     // 先初始化绕过主机列表，使 build_client 能够读取到
-    if CURRENT_BYPASS_HOSTS.set(RwLock::new(bypass_opt.clone())).is_err() {
+    if CURRENT_BYPASS_HOSTS
+        .set(RwLock::new(bypass_opt.clone()))
+        .is_err()
+    {
         // 已初始化，更新现有值
         if let Some(lock) = CURRENT_BYPASS_HOSTS.get() {
             if let Ok(mut b) = lock.write() {

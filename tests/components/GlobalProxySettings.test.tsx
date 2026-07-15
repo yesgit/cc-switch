@@ -12,8 +12,13 @@ const scanMutateAsyncMock = vi.fn();
 
 vi.mock("@/hooks/useGlobalProxy", () => ({
   useGlobalProxyUrl: () => ({ data: "http://127.0.0.1:7890", isLoading: false }),
+  useGlobalProxyBypass: () => ({ data: null, isLoading: false }),
   useSetGlobalProxyUrl: () => ({
     mutateAsync: mutateAsyncMock,
+    isPending: false,
+  }),
+  useSetGlobalProxyBypass: () => ({
+    mutateAsync: vi.fn(),
     isPending: false,
   }),
   useTestProxy: () => ({
