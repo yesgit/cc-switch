@@ -59,7 +59,7 @@ describe("GlobalProxySettings", () => {
 
     fireEvent.change(urlInput, { target: { value: "http://localhost:8080" } });
 
-    const saveButton = screen.getByRole("button", { name: "common.save" });
+    const saveButton = screen.getAllByRole("button", { name: "common.save" })[0];
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalled());

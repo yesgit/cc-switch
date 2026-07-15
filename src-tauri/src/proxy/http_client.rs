@@ -263,7 +263,7 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client, String> {
         // 应用绕过主机列表（如果配置了的话）
         let proxy = if let Some(ref bypass) = get_current_bypass() {
             if let Some(no_proxy) = reqwest::NoProxy::from_string(bypass.as_str()) {
-                proxy.no_proxy(no_proxy)
+                proxy.no_proxy(Some(no_proxy))
             } else {
                 proxy
             }
