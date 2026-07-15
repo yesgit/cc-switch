@@ -166,10 +166,10 @@ pub(crate) fn build_responses_usage_from_anthropic(usage: Option<&Value>) -> Val
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
 
-    let input_tokens = fresh_input.saturating_add(cache_read);
-    let total_tokens = input_tokens
-        .saturating_add(cache_creation)
-        .saturating_add(output);
+    let input_tokens = fresh_input
+        .saturating_add(cache_read)
+        .saturating_add(cache_creation);
+    let total_tokens = input_tokens.saturating_add(output);
 
     let mut result = json!({
         "input_tokens": input_tokens,
@@ -177,10 +177,14 @@ pub(crate) fn build_responses_usage_from_anthropic(usage: Option<&Value>) -> Val
         "total_tokens": total_tokens,
         "output_tokens_details": { "reasoning_tokens": reasoning }
     });
-    if cache_read > 0 {
-        result["input_tokens_details"] = json!({ "cached_tokens": cache_read });
+    if cache_read > 0 || cache_creation > 0 {
+        result["input_tokens_details"] = json!({
+            "cached_tokens": cache_read,
+            "cache_write_tokens": cache_creation
+        });
     }
-    // Explicitly pass through cache_creation so the downstream usage parser (from_codex_response) attributes billing correctly.
+    // Keep the legacy top-level alias for one compatibility window. New code reads
+    // the official nested cache_write_tokens field first.
     if cache_creation > 0 {
         result["cache_creation_input_tokens"] = json!(cache_creation);
     }
@@ -2078,16 +2082,14 @@ mod tests {
             }
         });
         let result = anthropic_response_to_responses(input).unwrap();
-        // input_tokens = fresh + cache_read = 20 + 60 = 80 (excluding cache_creation).
-        // The Codex billing calculator only subtracts cache_read from input (→ billable=fresh=20),
-        // and separately lists cache-creation cost via cache_creation_input_tokens; folding creation into input would double-charge.
-        assert_eq!(result["usage"]["input_tokens"], 80);
+        // Responses input_tokens is the inclusive total: fresh + read + write.
+        assert_eq!(result["usage"]["input_tokens"], 100);
         assert_eq!(result["usage"]["output_tokens"], 5);
         assert_eq!(
             result["usage"]["output_tokens_details"]["reasoning_tokens"],
             3
         );
-        // total still includes everything: 80 + cache_creation 20 + output 5 = 105
+        // total includes input total + output exactly once.
         assert_eq!(result["usage"]["total_tokens"], 105);
         assert_eq!(result["usage"]["input_tokens_details"]["cached_tokens"], 60);
         assert_eq!(
