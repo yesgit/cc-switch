@@ -1,5 +1,6 @@
 //! OpenAI Chat Completions SSE → OpenAI Responses SSE conversion.
 
+use super::codex_responses_sse as sse;
 use super::{
     codex_chat_common::{
         extract_reasoning_field_text, split_leading_think_block, strip_leading_think_open_tag,

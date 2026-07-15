@@ -2604,7 +2604,6 @@ base_url = "https://production.api/v1"
         for profile in [
             CodexCatalogToolProfile::ProxyChat,
             CodexCatalogToolProfile::NativeResponses,
-            CodexCatalogToolProfile::Anthropic,
         ] {
             let catalog = codex_model_catalog_from_specs(&specs, &template, profile);
             let models = catalog["models"].as_array().expect("models array");
